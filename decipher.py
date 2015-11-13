@@ -67,9 +67,23 @@ def sort_char_occurences(char_occurences):
         insert_char(sorted_chars, char_occurences, char)
     return sorted_chars
 
+def sort_chars(chars, char_occurences):
+    """
+    Creates a list of chars sorted by number of occurences (highest to lowest)
+
+    @type chars set
+    @param chars The set of chars to be sorted
+    @type char_occurences dict
+    @param char_occurences A dict [char:int] mapping a char to the number of occurences
+    """
+    sorted_chars = []
+    for char in chars:
+        insert_char(sorted_chars, char_occurences, char)
+    return sorted_chars
+
 def try_substitution(char_map, char, sub, char_word_map, dictionary_str):
     """
-    Attempts to perform regex maps with dictionary with the given substitutions
+    Attempts to perform regex maps with dictionary with the given substitution
     Returns true is 80% or more of words have matches
     
     This function is used in regex_search to test a proposed character substitution
@@ -120,7 +134,71 @@ def try_substitution(char_map, char, sub, char_word_map, dictionary_str):
         word = words_to_match[i]
         word_length = words_length[i]
         if word_length in dictionary_str:
-            match = re.search(word, dictionary_str[word_length].lower())
+            match = re.search(word, dictionary_str[word_length])
+            if match:
+                matched += 1
+
+    if float(matched)/float(len(words_to_match)) > 0.8:
+        return True
+    else:
+        return False
+
+def try_substitutions(char_map, char_subs, char_word_map, dictionary_str):
+    """
+    Attempts to perform regex maps with dictionary with the given substitutions
+    Returns true is 80% or more of words have matches
+    
+    This function is used in regex_search to test a proposed character substitution
+
+    @type char_map dict
+    @param char_map A dict [char:char] of the currently mapped cipher chars
+    @type char_subs dict
+    @param char A dict [char:char} of the proposed substiutions
+    @type char_word_map dict
+    @param char_word_map A dict [char:set([string])] mapping a character to a set of all cipher words containing that character
+    @type dictionary_str dict
+    @param dictionary_str A dict [int:string] mapping a word length to a '.'join() string of all baseline words of that length
+    """
+    # Create union of sets of words to test
+    words = set([])
+    words_to_match = []
+    words_length = []
+    matched = 0
+    
+    for char in char_subs:
+        words = words | char_word_map[char]
+
+    # Create regex strings to match
+    for word in words:
+        regex = r'\b'
+        count = 0
+        for i in range(0, len(word)):
+            if word[i] in char_map:
+                if count > 0:
+                    regex += '[a-z]{' + str(count) + '}'
+                    count = 0
+                regex += '[' + char_map[word[i]] + char_map[word[i]].upper() + ']'
+            elif word[i] in char_subs:
+                if count > 0:
+                    regex += '[a-z]{' + str(count) + '}'
+                    count = 0
+                regex += '[' + char_subs[word[i]] + char_subs[word[i]].upper() + ']'                
+            else:
+                count += 1
+
+        if count > 0:
+            regex += '[a-z]{' + str(count) + '}'
+        regex += r'\b'
+        words_to_match.append(regex)
+        words_length.append(len(word))
+
+
+    # Search for matches in dictionary
+    for i in range(0, len(words_to_match)):
+        word = words_to_match[i]
+        word_length = words_length[i]
+        if word_length in dictionary_str:
+            match = re.search(word, dictionary_str[word_length])
             if match:
                 matched += 1
 
@@ -129,7 +207,8 @@ def try_substitution(char_map, char, sub, char_word_map, dictionary_str):
     else:
         return False
         
-def regex_search(char_map, cipher_char_frequency, base_char_frequency, char_word_map, dictionary_str):
+def regex_search(char_map, cipher_char_frequency, base_char_frequency, char_word_map,
+                 cipher_dictionary, base_dictionary_str, base_char_occurences):
     """
     Regex search, recursively attempting substitutions and checking results in dictionaries
     
@@ -147,6 +226,39 @@ def regex_search(char_map, cipher_char_frequency, base_char_frequency, char_word
     @type dictionary_str dict
     @param dictionary_str A dict [int:string] mapping a word length to a '.'join() string of all baseline words of that length
     """
+
+    # Attempt to whitelist possible substitution chars
+    whitelist = try_whitelist(char_map, cipher_dictionary, base_dictionary_str, char_word_map, base_char_occurences)
+
+    # Check for chars who only have a single possible substitution
+    char_subs = {}
+    for char in whitelist:
+        if len(whitelist[char]) == 0:
+            return False
+        elif len(whitelist[char]) == 1:
+            char_subs[char] = whitelist[char][0]
+
+    if len(char_subs) > 0:
+        # Test substitutions
+        result = try_substitutions(char_map, char_subs, char_word_map, base_dictionary_str)
+        if result:
+            # Update char_map with potential
+            for char in char_subs:
+                char_map[char] = char_subs[char]
+            if len(char_map) == len(cipher_char_frequency):
+            # We're done!
+                return True
+            else:
+                # Recurse down
+                result = regex_search(char_map, cipher_char_frequency, base_char_frequency, char_word_map,
+                                      cipher_dictionary, base_dictionary_str, base_char_occurences)
+                if result:
+                    return True
+                else:
+                    for char in char_subs:
+                        del char_map[char]
+                    return False
+
     # Determine the char to substitute, we'll pick the largest occuring char in the cipher that isn't already mapped
     char = ''
     for x in cipher_char_frequency:
@@ -157,26 +269,91 @@ def regex_search(char_map, cipher_char_frequency, base_char_frequency, char_word
     if char == '':
         return False
 
-    # Attempt to substitute, we'll go in order of the statistically largest occuring char that isn't already mapped
-    for x in base_char_frequency:
-        if x not in char_map.values():
-            # Test substitution
-            result = try_substitution(char_map, char, x, char_word_map, dictionary_str)
-            if result:
-                # Update char_map with potential
-                char_map[char] = x
-                if len(char_map) == len(cipher_char_frequency):
-                    # We're done!
-                    return True
-                else:
-                    # Recurse down
-                    result = regex_search(char_map, cipher_char_frequency, base_char_frequency, char_word_map, dictionary_str)
-                    if result:
+    if char in whitelist:
+        for x in whitelist[char]:
+            if x not in char_map.values():
+                # Test substitution
+                result = try_substitution(char_map, char, x, char_word_map, base_dictionary_str)
+                if result:
+                    # Update char_map with potential
+                    char_map[char] = x
+                    if len(char_map) == len(cipher_char_frequency):
+                        # We're done!
                         return True
                     else:
-                        del char_map[char]
+                        # Recurse down
+                        result = regex_search(char_map, cipher_char_frequency, base_char_frequency, char_word_map,
+                                          cipher_dictionary, base_dictionary_str, base_char_occurences)
+                        if result:
+                            return True
+                        else:
+                            del char_map[char]
+                            return False
+    else:
+        # Attempt to substitute, we'll go in order of the statistically largest occuring char that isn't already mapped
+        for x in base_char_frequency:
+            if x not in char_map.values():
+                # Test substitution
+                result = try_substitution(char_map, char, x, char_word_map, base_dictionary_str)
+                if result:
+                    # Update char_map with potential
+                    char_map[char] = x
+                    if len(char_map) == len(cipher_char_frequency):
+                        # We're done!
+                        return True
+                    else:
+                        # Recurse down
+                        result = regex_search(char_map, cipher_char_frequency, base_char_frequency, char_word_map,
+                                          cipher_dictionary, base_dictionary_str, base_char_occurences)
+                        if result:
+                            return True
+                        else:
+                            del char_map[char]
+                            return False
 
-    return False
+def try_whitelist(char_map, cipher_dictionary, base_dictionary_str, cipher_char_word, base_char_occurences):
+    whitelist = {}
+    if len(char_map) == 0:
+        return whitelist
+
+    for i in range(0, len(char_map)):
+        word_length = i + 2
+        if word_length in cipher_dictionary:
+            cipher_words = cipher_dictionary[word_length]
+            for word in cipher_words:
+                word_lower = word.lower()
+                matched_chars = 0
+                unmatched_char_index = -1
+                regex_list = ['[a-z]'] * word_length
+                for j in range(0, word_length):
+                    char = word_lower[j]
+                    if char in char_map:
+                        matched_chars += 1
+                        regex_list[j] = char_map[char]
+                    elif unmatched_char_index == -1:
+                        unmatched_char_index = j
+                    else:
+                        break
+            
+                if matched_chars == (word_length - 1):
+                    base_words = base_dictionary_str[word_length]
+                    regex = r'\b' + ''.join(regex_list) + r'\b'
+                    whiteset = set([])
+                    matches = re.findall(regex, base_words)
+                    if matches:
+                        for matched_word in matches:
+                            whiteset.add(matched_word[unmatched_char_index])
+                        
+                    unmatched_char = word_lower[unmatched_char_index]
+                    char_whitelist = sort_chars(whiteset, base_char_occurences)
+                    if unmatched_char not in whitelist:
+                        whitelist[unmatched_char] = char_whitelist
+                    else:
+                        old_char_whitelist = whitelist[unmatched_char]
+                        new_char_whiteset = set(old_char_whitelist) & set(char_whitelist)
+                        new_char_whitelist = sort_chars(new_char_whiteset, base_char_occurences)
+                        whitelist[unmatched_char] = new_char_whitelist
+    return whitelist
 
 def process_base_file(base_file_name, dictionary, char_occurences=None, frequency_set=False):
     """
@@ -194,11 +371,7 @@ def process_base_file(base_file_name, dictionary, char_occurences=None, frequenc
     """
     ### Process base file, updating a dict of legal words and optionally updating a dict of character occurences
     # Open base file
-    try:
-        base_file = open(base_file_name, 'r', encoding='utf-8')
-    except IOError as e:
-        print('Failed to open base file:\n{0}'.format(e))
-        sys.exit(0)
+    base_file = open(base_file_name, 'r', encoding='utf-8')
 
     flag = True
     while(flag):
@@ -234,7 +407,7 @@ def dictionary_from_content(content, dictionary):
             # Add to appropriate dictionary
             if word_length not in dictionary:
                 dictionary[word_length] = set([])
-            dictionary[word_length].add(word)
+            dictionary[word_length].add(word.lower())
 
 def process_frequency_file(frequency_file_name):
     """
@@ -246,12 +419,7 @@ def process_frequency_file(frequency_file_name):
     """
     global char_frequency_default
     char_frequency = []
-    try:
-        frequency_file = open(frequency_file_name, 'r', encoding='utf-8')
-    except IOError as e:
-        print('Failed to open frequency file: {0}.'.format(frequency_file_name))
-        return char_frequency
-
+    frequency_file = open(frequency_file_name, 'r', encoding='utf-8')
     frequency_content = frequency_file.read()
     frequency_file.close()
     for char in frequency_content:
@@ -415,11 +583,7 @@ def main(argv):
             frequency_set = False
 
     # Open and read cipher file
-    try:
-        input_file = open(input_file_name, 'r', encoding='utf-8')
-    except IOError as e:
-        print('Failed to open input file: {0}'.format(e))
-        sys.exit(0)
+    input_file = open(input_file_name, 'r', encoding='utf-8')
         
     input = input_file.read()    
     # Close input file
@@ -450,6 +614,9 @@ def main(argv):
     
     # Create map of cipher word lengths to cipher words
     word_length_map = map_word_length(input)
+    cipher_dictionary = {}
+    for word_length in word_length_map:
+        cipher_dictionary[word_length] = set(word_length_map[word_length])
     
     char_map = {}
     
@@ -459,14 +626,10 @@ def main(argv):
         char_map[char] = a_i[char]
 
     # Search
-    if regex_search(char_map, sorted_cipher_chars, sorted_normal_chars, char_word_map, dictionary_str):
+    if regex_search(char_map, sorted_cipher_chars, sorted_normal_chars, char_word_map,
+                    cipher_dictionary, dictionary_str, normal_char_occurences):
         # Open and write cipher file
-        try:
-            cipher_file = open(cipher_file_name, 'w', encoding='utf-8')
-        except IOError as e:
-            print('Failed to open cipher file: {0}'.format(e))
-            sys.exit(0)
-            
+        cipher_file = open(cipher_file_name, 'w', encoding='utf-8')
         for char in char_map:
             cipher_file.write('{0} : {1}\n'.format(char, char_map[char]))
         # Close cipher file
@@ -487,14 +650,11 @@ def main(argv):
                 output[i] = input[i]
 
         # Open and write output file
-        try:
-            output_file = open(output_file_name, 'w', encoding='utf-8')
-        except IOError as e:
-            print('Failed to open output file: {0}'.format(e))
-            sys.exit(0)
+        output_file = open(output_file_name, 'w', encoding='utf-8')
         output_file.write(''.join(output))
         # Close output file
         output_file.close()
+        
         print('Cipher found')
         sys.exit(0)
     else:
