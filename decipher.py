@@ -26,6 +26,7 @@ def insert_char(sorted_chars, char_occurences, char):
     @type char char
     @param char The character to insert into the list
     """
+    
     char_length = len(sorted_chars)
     if char_length == 0:
         sorted_chars.append(char)
@@ -62,6 +63,7 @@ def sort_char_occurences(char_occurences):
     @type char_occurences dict
     @param char_occurences A dict [char:int] mapping a char to the number of occurences
     """
+    
     sorted_chars = []
     for char in char_occurences:
         insert_char(sorted_chars, char_occurences, char)
@@ -76,6 +78,7 @@ def sort_chars(chars, char_occurences):
     @type char_occurences dict
     @param char_occurences A dict [char:int] mapping a char to the number of occurences
     """
+    
     sorted_chars = []
     for char in chars:
         insert_char(sorted_chars, char_occurences, char)
@@ -84,7 +87,8 @@ def sort_chars(chars, char_occurences):
 def try_substitution(char_map, char, sub, char_word_map, dictionary_str):
     """
     Attempts to perform regex maps with dictionary with the given substitution
-    Returns true is 80% or more of words have matches
+
+    Returns true is 80% or more of words have matches, false otherwise
     
     This function is used in regex_search to test a proposed character substitution
 
@@ -99,7 +103,7 @@ def try_substitution(char_map, char, sub, char_word_map, dictionary_str):
     @type dictionary_str dict
     @param dictionary_str A dict [int:string] mapping a word length to a '.'join() string of all baseline words of that length
     """
-    ### 
+    
     words_to_match = []
     words_length = []
     matched = 0
@@ -146,7 +150,8 @@ def try_substitution(char_map, char, sub, char_word_map, dictionary_str):
 def try_substitutions(char_map, char_subs, char_word_map, dictionary_str):
     """
     Attempts to perform regex maps with dictionary with the given substitutions
-    Returns true is 80% or more of words have matches
+
+    Returns true is 80% or more of words have matches, false otherwise
     
     This function is used in regex_search to test a proposed character substitution
 
@@ -159,6 +164,7 @@ def try_substitutions(char_map, char_subs, char_word_map, dictionary_str):
     @type dictionary_str dict
     @param dictionary_str A dict [int:string] mapping a word length to a '.'join() string of all baseline words of that length
     """
+    
     # Create union of sets of words to test
     words = set([])
     words_to_match = []
@@ -329,6 +335,7 @@ def try_whitelist(char_map, cipher_dictionary, base_dictionary_str, cipher_char_
     @type base_char_occurences dict
     @param base_char_occurences A dict [char:int] mapping a character to the number of times it appeared in the baseline text
     """
+    
     whitelist = {}
     if len(char_map) == 0:
         return whitelist
@@ -386,7 +393,7 @@ def process_base_file(base_file_name, dictionary, char_occurences=None, frequenc
     @type frequency_set bool
     @param frequency_set A bool dictating whether a frequency file was provided (i.e. used to determine whether char_occurences should be updated)
     """
-    ### Process base file, updating a dict of legal words and optionally updating a dict of character occurences
+
     # Open base file
     base_file = open(base_file_name, 'r', encoding='utf-8')
 
@@ -416,7 +423,7 @@ def dictionary_from_content(content, dictionary):
     @type dictionary dict
     @param dictionary A dict [int:set([string])] mapping word lengths to a set of all baseline words of that length
     """
-    ### Process content to add to dictionary of length mappings
+
     match = re.findall(r'\b[a-zA-Z]+\b', content)
     if len(match) > 0:
         for word in match:
@@ -429,11 +436,13 @@ def dictionary_from_content(content, dictionary):
 def process_frequency_file(frequency_file_name):
     """
     Read a text file containing a whitespace delineated list of chars in order of decreasing probability of occuring in a word
+    
     Creates and returns a list of characters sorted highest to lowest
 
     @type frequency_file_name string
     @param frequency_file_name The name of the text file
     """
+    
     global char_frequency_default
     char_frequency = []
     frequency_file = open(frequency_file_name, 'r', encoding='utf-8')
@@ -447,11 +456,13 @@ def process_frequency_file(frequency_file_name):
 def count_char(string):
     """
     Process a string to create a dict [char:int] of how many times a character occurs
+
     Returns the dictionary
 
     @type string string
     @param string The string to process
     """
+    
     char_occurences = {}
     string_lower = string.lower()
     for i in range(0, len(string_lower)):
@@ -465,11 +476,13 @@ def count_char(string):
 def map_char_word(string):
     """
     Process a string to create a dict [char:set([string])] of characters to words containing the character
+
     Returns the dictionary
 
     @type string string
     @param string The string to process
     """
+    
     char_word_map = {}
     string_lower = string.lower()
     start_marker = 0
@@ -494,12 +507,13 @@ def map_char_word(string):
 def map_word_length(string):
     """
     Process a string to create a dict [int:list[string]] of word lengths to cipher words
+
     Returns the dictionary
 
     @type string string
     @param string The string to process
     """
-    ### 
+    
     word_length_map = {}
     start_marker = 0
     start_word = False
@@ -524,11 +538,13 @@ def map_word_length(string):
 def find_a_i(word_length_map):
     """
     Attempt to find 'a' and/or 'i' based on word length and capitalization
+    
     Returns a dict [char:char} charmap of values found
 
     @type word_length_map dict
     @param word_length_map A dict [int:list[string]] mapping word lengths to a list of cipher words of that length
     """
+    
     # There are only two letters that can stand alone, 'a' and 'i'
     # 'i' must be capitalized no matter what, so if there is a char that is not capitalized, we've found 'a'
     char_map = {}
