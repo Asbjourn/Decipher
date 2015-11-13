@@ -312,6 +312,23 @@ def regex_search(char_map, cipher_char_frequency, base_char_frequency, char_word
                             return False
 
 def try_whitelist(char_map, cipher_dictionary, base_dictionary_str, cipher_char_word, base_char_occurences):
+    """
+    Attempts to create a whitelist for potential character substitutions.
+    This is done by finding all cipher words that are missing only a single character and finding all matching letters.
+    
+    Returns a dict [char:[set([char])]] of char to its available whitelist
+
+    @type char_map dict
+    @param char_map A dict [char:char] of the currently mapped cipher chars
+    @type cipher_dictionary dict
+    @param cipher_dictionary A dict [int:set([string])] of word lengths to a set of cipher words of that length
+    @type base_dictionary dict
+    @param base_dictionary_str A dict [int:string] of word lengths to a ' '.join() string of all unique baseline words of that length
+    @type char_word_map dict
+    @param char_word_map A dict [char:set([string])] mapping a character to a set of all cipher words containing that character
+    @type base_char_occurences dict
+    @param base_char_occurences A dict [char:int] mapping a character to the number of times it appeared in the baseline text
+    """
     whitelist = {}
     if len(char_map) == 0:
         return whitelist
@@ -345,14 +362,14 @@ def try_whitelist(char_map, cipher_dictionary, base_dictionary_str, cipher_char_
                             whiteset.add(matched_word[unmatched_char_index])
                         
                     unmatched_char = word_lower[unmatched_char_index]
-                    char_whitelist = sort_chars(whiteset, base_char_occurences)
                     if unmatched_char not in whitelist:
-                        whitelist[unmatched_char] = char_whitelist
+                        # Sort highest occurence to lowest
+                        whitelist[unmatched_char] = sort_chars(whiteset, base_char_occurences)
                     else:
                         old_char_whitelist = whitelist[unmatched_char]
-                        new_char_whiteset = set(old_char_whitelist) & set(char_whitelist)
-                        new_char_whitelist = sort_chars(new_char_whiteset, base_char_occurences)
-                        whitelist[unmatched_char] = new_char_whitelist
+                        new_char_whiteset = set(old_char_whitelist) & whiteset
+                        # Sort highest occurence to lowest
+                        whitelist[unmatched_char] = sort_chars(new_char_whiteset, base_char_occurences)
     return whitelist
 
 def process_base_file(base_file_name, dictionary, char_occurences=None, frequency_set=False):
